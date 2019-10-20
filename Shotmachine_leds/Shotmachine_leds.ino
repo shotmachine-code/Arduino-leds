@@ -39,7 +39,8 @@ void setup() {
  for (int i = 108; i < 113; i++) {
 
     // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(255, 255, 255)); // Moderately bright green color.
+    //pixels.setPixelColor(i, pixels.Color(255, 255, 255)); // Moderately bright green color.
+    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // Moderately bright green color.
 
 
   }
@@ -116,7 +117,8 @@ void loop() {
     Serial.print("recieved string: ");
     Serial.println (buf);
     if (buf == 72){
-        ledson();
+        //ledson();
+        ledsoff();
     }
     if (buf == 73){
         ledsoff();
