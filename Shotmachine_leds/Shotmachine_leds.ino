@@ -82,6 +82,7 @@ void loop() {
       }
       else if (commandValue == "1"){
         ledWait = true;
+        ledsoff();
         Serial.println ("leds waitstate");
       }
       else if (commandValue == "2"){
