@@ -1,65 +1,39 @@
-// NeoPixel Ring simple sketch (c) 2013 Shae Erisson
-// released under the GPLv3 license to match the rest of the AdaFruit NeoPixel library
 
 #include <Adafruit_NeoPixel.h>
 #include <SPI.h>
-#ifdef __AVR__
-#include <avr/power.h>
-#endif
 
-#include <SPI.h>
-
-byte buf;
+char buf [100];
 volatile byte pos;
 volatile boolean process_it;
+bool ledWait;
+int semicolumnIndex;
+String command;
+String commandValue;
+String Stringbuffer;
 
-// Which pin on the Arduino is connected to the NeoPixels?
-// On a Trinket or Gemma we suggest changing this to 1
-#define PIN            8
+#define LedDataPin        8
+#define NumPixels         112
+// 108 for the flashlight, 109 till 113 for shothok
 
-// How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      112
-
-// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
-// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-// example for more information on possible values.
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-
-int delayval = 500; // delay for half a second
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NumPixels, LedDataPin, NEO_GRB + NEO_KHZ800);
+int delayval = 500;
 
 void setup() {
-  // This is for Trinket 5V 16MHz, you can remove these three lines if you are not using a Trinket
-#if defined (__AVR_ATtiny85__)
-  if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
-#endif
-  // End of trinket special code
 
-  pixels.begin(); // This initializes the NeoPixel library.
+  pixels.begin();         // This initializes the NeoPixel library.
+  ledsoff();              // Ensure all leds are off
 
- for (int i = 108; i < 113; i++) {
+  Serial.begin (9600);    // debugging
 
-    // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    //pixels.setPixelColor(i, pixels.Color(255, 255, 255)); // Moderately bright green color.
-    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // Moderately bright green color.
-
-
-  }
-   pixels.show();
-   Serial.begin (9600);   // debugging
-
-  // have to send on master in, *slave out*
+  // SPI initialize
   pinMode(MISO, OUTPUT);
   pinMode(MOSI, INPUT);
-  
-  // turn on SPI in slave mode
-  SPCR |= _BV(SPE);
-  
-  // get ready for an interrupt 
-  pos = 0;   // buffer empty
-  process_it = false;
-
-  // now turn on interrupts
-  SPI.attachInterrupt();
+  SPCR |= _BV(SPE);       // SPI in slave mode
+  pos = 0;                // buffer empty
+  process_it = false;     // reset indicator
+  ledWait = false;        // waitstate for leds when machine is on, but no picture is taken 
+  SPI.attachInterrupt();  // now turn on interrupts
+  SPI.setClockDivider(SPI_CLOCK_DIV4); // set max clockspeed for SPI
   
 }
 
@@ -67,62 +41,59 @@ void setup() {
 ISR (SPI_STC_vect)
 {
 byte c = SPDR;  // grab byte from SPI Data Register
-  
-  // add to buffer if room
-  if (pos < sizeof buf)
+  if (pos < (sizeof (buf) -1))
     {
-    buf = c;
-    //Serial.println(c);
-    
-    // example: newline means time to process buffer
-    if (c == 72 || c == 73){
-      process_it = true;  
-    }  // end of room available
+      if (c == '\n'){
+        process_it = true;  
+      }
+      else{
+        buf [pos++] = c;
+      }
     }
-}  // end of interrupt routine SPI_STC_vect
-
-void ledson(){
-  for (int i = 0; i < 108; i++) {
-
-    // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(255, 255, 255)); // Moderately bright green color.
-
-   
-    //delay(delayval); // Delay for a period of time (in milliseconds).
-
-  }
-   pixels.show(); // This sends the updated pixel color to the hardware.
 }
 
-void ledsoff(){
+void ledson(){  // Flashlight on
   for (int i = 0; i < 108; i++) {
-
-    // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // Moderately bright green color.
-
-   
-    //delay(delayval); // Delay for a period of time (in milliseconds).
-
+    pixels.setPixelColor(i, pixels.Color(255, 255, 255));
   }
-   pixels.show(); // This sends the updated pixel color to the hardware.
+   pixels.show();
+}
+
+void ledsoff(){  // All leds completely off
+  for (int i = 0; i < 113; i++) {
+    pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+  }
+  pixels.show();
 }
 
 void loop() {
-  //ledson();
-  //delay(10000);
-  //ledsoff();
-  //delay(10000);
-  
   if (process_it){
     Serial.print("recieved string: ");
     Serial.println (buf);
-    if (buf == 72){
-        //ledson();
+    Stringbuffer = String(buf);
+    semicolumnIndex = Stringbuffer.indexOf(';');
+    command = Stringbuffer.substring(0, semicolumnIndex);
+    commandValue = Stringbuffer.substring(semicolumnIndex+1);
+    if (command == "state"){
+      if (commandValue == "0"){
+        ledWait = false;
         ledsoff();
+        Serial.println ("leds complete off");
+      }
+      else if (commandValue == "1"){
+        ledWait = true;
+        Serial.println ("leds waitstate");
+      }
+      else if (commandValue == "2"){
+        ledWait = false;
+        ledson();
+        Serial.println ("leds complete on");
+      }
     }
-    if (buf == 73){
-        ledsoff();
-    }
+    buf[0] = (char)0;
+    pos = 0; 
     process_it = false;
-    }  // end of flag set
+  }
+  
+    
 }
